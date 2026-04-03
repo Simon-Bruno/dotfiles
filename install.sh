@@ -35,8 +35,26 @@ case "$OS" in
         cd "$DOTFILES"
         stow -t ~ hypr eww nvim
         ;;
-    fedora)
-        sudo dnf install -y $(cat "$DOTFILES/packages/fedora.txt" | tr '\n' ' ')
+    fedora|fedora-asahi-remix)
+        git config --global user.email "simonadrbruno@gmail.com"
+        git config --global user.name "Simon Bruno"
+        sudo dnf copr enable -y sdegler/hyprland
+        sudo dnf install -y $(grep -v '^eww$' "$DOTFILES/packages/fedora.txt" | tr '\n' ' ') \
+            rust cargo gtk3-devel glib2-devel pango-devel gdk-pixbuf2-devel cairo-devel atk-devel libdbusmenu-devel libdbusmenu-gtk3-devel gtk-layer-shell-devel
+        # Build eww from source (no aarch64 COPR available)
+        if ! command -v eww &>/dev/null; then
+            rm -rf /tmp/eww && git clone https://github.com/elkowar/eww /tmp/eww
+            cd /tmp/eww
+            cargo build --release --no-default-features --features wayland
+            sudo install -m755 target/release/eww /usr/local/bin/eww
+            cd "$DOTFILES"
+        fi
+        # Install Nerd Fonts Symbols
+        mkdir -p ~/.local/share/fonts
+        curl -fLo ~/.local/share/fonts/NerdFontsSymbolsOnly.zip \
+            https://github.com/ryanoasis/nerd-fonts/releases/latest/download/NerdFontsSymbolsOnly.zip
+        unzip -o ~/.local/share/fonts/NerdFontsSymbolsOnly.zip -d ~/.local/share/fonts/
+        fc-cache -fv
         cd "$DOTFILES"
         stow -t ~ hypr eww nvim
         ;;
