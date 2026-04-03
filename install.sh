@@ -22,7 +22,7 @@ case "$OS" in
             echo "Homebrew not found. Install it from https://brew.sh"
             exit 1
         fi
-        brew install neovim stow
+        brew install neovim stow git
         cd "$DOTFILES"
         stow -t ~ nvim
         ;;
@@ -33,12 +33,12 @@ case "$OS" in
             sudo pacman -S --needed - < "$DOTFILES/packages/arch.txt"
         fi
         cd "$DOTFILES"
-        stow -t ~ hypr eww dunst nvim
+        stow -t ~ hypr eww nvim
         ;;
     fedora)
         sudo dnf install -y $(cat "$DOTFILES/packages/fedora.txt" | tr '\n' ' ')
         cd "$DOTFILES"
-        stow -t ~ hypr eww dunst nvim
+        stow -t ~ hypr eww nvim
         ;;
     *)
         echo "Unsupported OS: $OS. Install packages manually from packages/."
