@@ -63,5 +63,24 @@ case "$OS" in
         ;;
 esac
 
+# Install Firefox user.js into active profile
+install_firefox_userjs() {
+    local profile_dir="$1"
+    local profile
+    profile=$(grep -A1 'Default=1' "$profile_dir/profiles.ini" 2>/dev/null | grep 'Path=' | cut -d= -f2)
+    if [ -n "$profile" ]; then
+        cp "$DOTFILES/firefox/user.js" "$profile_dir/$profile/user.js"
+        echo "Firefox user.js installed to $profile_dir/$profile"
+    else
+        echo "Could not find default Firefox profile, skipping user.js install."
+    fi
+}
+
+if [ -d "$HOME/.config/mozilla/firefox" ]; then
+    install_firefox_userjs "$HOME/.config/mozilla/firefox"
+elif [ -d "$HOME/Library/Application Support/Firefox" ]; then
+    install_firefox_userjs "$HOME/Library/Application Support/Firefox"
+fi
+
 echo "Done!"
 echo "On first nvim launch, LazyVim will bootstrap and install plugins automatically."
