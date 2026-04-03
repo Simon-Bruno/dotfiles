@@ -36,6 +36,16 @@
     (ws-btn :num 4)
     (ws-btn :num 5)))
 
+(defwidget workspaces2 []
+  (box :orientation "h"
+       :space-evenly false
+       :spacing 10
+    (ws-btn :num 6)
+    (ws-btn :num 7)
+    (ws-btn :num 8)
+    (ws-btn :num 9)
+    (ws-btn :num 10)))
+
 (defwidget right []
   (box :orientation "h"
        :space-evenly false
@@ -60,6 +70,13 @@
     (label :class "date" :text time)
     (right)))
 
+(defwidget bar-layout2 []
+  (centerbox :orientation "h"
+             :class "bar"
+    (workspaces2)
+    (label :class "date" :text time)
+    (box)))
+
 (defwindow bar
   :monitor 0
   :windowtype "dock"
@@ -72,3 +89,16 @@
                       :height "28px"
                       :anchor "top center")
   (bar-layout))
+
+(defwindow bar2
+  :monitor 1
+  :windowtype "dock"
+  :exclusive true
+  :focusable false
+  :stacking "bottom"
+  :geometry (geometry :x "0%"
+                      :y "0%"
+                      :width "100%"
+                      :height "28px"
+                      :anchor "top center")
+  (bar-layout2))
