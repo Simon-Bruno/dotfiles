@@ -22,7 +22,7 @@ case "$OS" in
             echo "Homebrew not found. Install it from https://brew.sh"
             exit 1
         fi
-        brew install neovim stow git
+        brew install neovim stow git firefox
         cd "$DOTFILES"
         stow -t ~ nvim
         ;;

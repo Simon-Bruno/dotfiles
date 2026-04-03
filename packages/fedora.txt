@@ -1,7 +1,8 @@
 hyprland
 eww
 kitty
-wofi
+rofi
 neovim
 stow
 git
+firefox
