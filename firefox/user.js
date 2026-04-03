@@ -6,4 +6,4 @@ user_pref("sidebar.verticalTabs", true);
 // - uBlock Origin: https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/
 // - Unhook: https://addons.mozilla.org/en-US/firefox/addon/youtube-recommended-videos/
 // - Firefox Color: https://addons.mozilla.org/en-US/firefox/addon/firefox-color/
-// - Firefox Color theme: (share your theme URL here)
+// - Firefox Color theme: https://color.firefox.com/?theme=XQAAAAIZAQAAAAAAAABBqYhm849SCia2CaaEGccwS
