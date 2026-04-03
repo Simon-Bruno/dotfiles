@@ -1,0 +1,8 @@
+hyprland
+eww
+dunst
+kitty
+wofi
+neovim
+stow
+git

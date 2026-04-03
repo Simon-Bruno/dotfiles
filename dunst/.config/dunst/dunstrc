@@ -1,0 +1,96 @@
+[global]
+    monitor = 0
+    follow = none
+
+    ### Geometry ###
+    width = 340
+    height = (0, 200)
+    origin = top-right
+    offset = (16, 50)
+    scale = 0
+    notification_limit = 5
+
+    ### Progress bar ###
+    progress_bar = true
+    progress_bar_height = 8
+    progress_bar_frame_width = 0
+    progress_bar_min_width = 150
+    progress_bar_max_width = 300
+    progress_bar_corner_radius = 4
+
+    ### Look & feel ###
+    transparency = 0
+    separator_height = 1
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 10
+    frame_width = 1
+    frame_color = "#3d4051"
+    gap_size = 6
+    separator_color = "#3d4051"
+    sort = yes
+    idle_threshold = 120
+
+    ### Text ###
+    font = Liberation Sans 11
+    line_height = 2
+    markup = full
+    format = "<b>%s</b>\n%b"
+    alignment = left
+    vertical_alignment = center
+    show_age_threshold = 60
+    ellipsize = middle
+    ignore_newline = no
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = no
+
+    ### Icons ###
+    enable_recursive_icon_lookup = true
+    icon_theme = Adwaita
+    icon_position = left
+    min_icon_size = 32
+    max_icon_size = 48
+    icon_corner_radius = 4
+
+    ### History ###
+    sticky_history = yes
+    history_length = 20
+
+    ### Misc ###
+    dmenu = /usr/bin/dmenu -p dunst:
+    browser = /usr/bin/xdg-open
+    always_run_script = true
+    title = Dunst
+    class = Dunst
+    corner_radius = 10
+    ignore_dbusclose = false
+    force_xwayland = false
+    force_xinerama = false
+
+    ### Mouse ###
+    mouse_left_click = close_current
+    mouse_middle_click = do_action, close_current
+    mouse_right_click = close_all
+
+[experimental]
+    per_monitor_dpi = false
+
+[urgency_low]
+    background = "#1e1f29"
+    foreground = "#c0caf5"
+    frame_color = "#3d4051"
+    timeout = 4
+    #icon = /path/to/icon
+
+[urgency_normal]
+    background = "#1e1f29"
+    foreground = "#c0caf5"
+    frame_color = "#7aa2f7"
+    timeout = 6
+
+[urgency_critical]
+    background = "#1e1f29"
+    foreground = "#f7768e"
+    frame_color = "#f7768e"
+    timeout = 0
