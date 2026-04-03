@@ -33,7 +33,7 @@ case "$OS" in
             sudo pacman -S --needed - < "$DOTFILES/packages/arch.txt"
         fi
         cd "$DOTFILES"
-        stow -t ~ hypr eww nvim
+        stow --adopt -t ~ hypr eww nvim
         ;;
     fedora|fedora-asahi-remix)
         git config --global user.email "simonadrbruno@gmail.com"
@@ -56,7 +56,7 @@ case "$OS" in
         unzip -o ~/.local/share/fonts/NerdFontsSymbolsOnly.zip -d ~/.local/share/fonts/
         fc-cache -fv
         cd "$DOTFILES"
-        stow -t ~ hypr eww nvim
+        stow --adopt -t ~ hypr eww nvim
         ;;
     *)
         echo "Unsupported OS: $OS. Install packages manually from packages/."
