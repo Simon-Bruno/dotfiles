@@ -50,18 +50,20 @@
   (box :orientation "h"
        :space-evenly false
        :halign "end"
+       :valign "center"
        :spacing 14
     (button :class "icon"
+            :valign "center"
             :onclick "blueman-manager &"
             {bt-powered == "yes" ? "󰂯" : "󰂲"})
-    (box :orientation "h" :space-evenly false :spacing 4
-      (label :class "icon"
+    (box :orientation "h" :space-evenly false :valign "center" :spacing 4
+      (label :class "icon" :valign "center"
              :text {muted == "1" ? "󰝟" : volume > 66 ? "󰕾" : volume > 33 ? "󰖀" : "󰕿"})
-      (label :class "stat" :text "${volume}%"))
-    (box :orientation "h" :space-evenly false :spacing 4
-      (label :class "icon"
+      (label :class "stat" :valign "center" :text "${volume}%"))
+    (box :orientation "h" :space-evenly false :valign "center" :spacing 4
+      (label :class "icon" :valign "center"
              :text {battery-status == "Charging" ? "󰂄" : "󰁹"})
-      (label :class "stat" :text "${battery}%"))))
+      (label :class "stat" :valign "center" :text "${battery}%"))))
 
 (defwidget bar-layout []
   (centerbox :orientation "h"
@@ -75,7 +77,7 @@
              :class "bar"
     (workspaces2)
     (label :class "date" :text time)
-    (box)))
+    (right)))
 
 (defwindow bar
   :monitor 0

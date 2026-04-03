@@ -6,7 +6,11 @@
 
 .bar {
   background: #0a0a0a;
-  padding: 3px 16px;
+  padding: 0px 16px;
+  min-height: 28px;
+}
+
+.bar > * {
   min-height: 28px;
 }
 
@@ -37,12 +41,10 @@
 .stat {
   color: #aaaacc;
   font-size: 13px;
-  min-height: 28px;
 }
 
 .icon {
   font-family: "Symbols Nerd Font Mono";
-  font-size: 14px;
+  font-size: 16px;
   color: #aaaacc;
-  min-height: 28px;
 }
