@@ -59,6 +59,8 @@ case "$OS" in
         if ! command -v hyprland-workspaces &>/dev/null && ! [ -f ~/.cargo/bin/hyprland-workspaces ]; then
             cargo install hyprland-workspaces
         fi
+        # Install Obsidian and Spotify via Flatpak
+        flatpak install -y flathub md.obsidian.Obsidian com.spotify.Client
         cd "$DOTFILES"
         stow --adopt -t ~ hypr-fedora eww-fedora nvim
         ;;

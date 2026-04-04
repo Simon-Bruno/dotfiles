@@ -6,3 +6,5 @@ neovim
 stow
 git
 firefox
+obsidian
+spotify
