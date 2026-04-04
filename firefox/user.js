@@ -1,3 +1,6 @@
+// Dark theme
+user_pref("ui.systemUsesDarkTheme", 1);
+
 // Vertical tabs
 user_pref("sidebar.revamp", true);
 user_pref("sidebar.verticalTabs", true);
