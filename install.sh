@@ -33,7 +33,7 @@ case "$OS" in
             sudo pacman -S --needed - < "$DOTFILES/packages/arch.txt"
         fi
         cd "$DOTFILES"
-        stow --adopt -t ~ hypr eww nvim
+        stow --adopt -t ~ hypr-arch eww-arch nvim
         ;;
     fedora|fedora-asahi-remix)
         git config --global user.email "simonadrbruno@gmail.com"
@@ -55,8 +55,12 @@ case "$OS" in
             https://github.com/ryanoasis/nerd-fonts/releases/latest/download/NerdFontsSymbolsOnly.zip
         unzip -o ~/.local/share/fonts/NerdFontsSymbolsOnly.zip -d ~/.local/share/fonts/
         fc-cache -fv
+        # Install hyprland-workspaces for multi-monitor eww bar
+        if ! command -v hyprland-workspaces &>/dev/null && ! [ -f ~/.cargo/bin/hyprland-workspaces ]; then
+            cargo install hyprland-workspaces
+        fi
         cd "$DOTFILES"
-        stow --adopt -t ~ hypr eww nvim
+        stow --adopt -t ~ hypr-fedora eww-fedora nvim
         ;;
     *)
         echo "Unsupported OS: $OS. Install packages manually from packages/."

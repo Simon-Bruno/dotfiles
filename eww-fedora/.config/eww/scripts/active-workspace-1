@@ -1,0 +1,10 @@
+#!/bin/bash
+hyprctl -j monitors | jq '.[] | select(.id==1) | .activeWorkspace.id'
+socat -u UNIX-CONNECT:"$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" - | \
+  while IFS= read -r line; do
+    case "$line" in
+      workspace>>*|focusedmon>>*|movewindow>>*)
+        hyprctl -j monitors | jq '.[] | select(.id==1) | .activeWorkspace.id'
+        ;;
+    esac
+  done

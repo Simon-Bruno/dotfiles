@@ -1,0 +1,5 @@
+#!/bin/bash
+wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -c MUTED
+pactl subscribe | grep --line-buffered "sink" | while read -r _; do
+    wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -c MUTED
+done

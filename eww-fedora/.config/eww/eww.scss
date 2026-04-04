@@ -1,0 +1,54 @@
+* {
+  all: unset;
+  font-family: "Adwaita Sans";
+  font-size: 14px;
+}
+
+.bar {
+  background: #0a0a0a;
+  padding: 0px 16px;
+  min-height: 28px;
+}
+
+.bar > * {
+  min-height: 28px;
+}
+
+.workspace-button {
+  color: #ccccdd;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 12px;
+}
+
+.workspace-button:hover {
+  color: #bbbbc8;
+}
+
+.workspace-button.workspace-active {
+  background: #b8b8c4;
+  color: #0a0a0a;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.date {
+  color: #bbbbcc;
+  font-size: 14px;
+  min-height: 28px;
+}
+
+.stat {
+  color: #aaaacc;
+  font-size: 13px;
+}
+
+.icon {
+  font-family: "Symbols Nerd Font Mono";
+  font-size: 16px;
+  color: #aaaacc;
+}
+
+.right-group {
+  padding: 0px 6px;
+}

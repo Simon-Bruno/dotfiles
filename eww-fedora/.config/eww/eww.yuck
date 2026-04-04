@@ -1,17 +1,17 @@
-(defpoll active-workspace-0 :interval "0.5s"
-  "hyprctl -j monitors | jq '.[] | select(.id==0) | .activeWorkspace.id'")
+(deflisten workspaces-0 :initial "[]"
+  "~/.cargo/bin/hyprland-workspaces eDP-1")
 
-(defpoll active-workspace-1 :interval "0.5s"
-  "hyprctl -j monitors | jq '.[] | select(.id==1) | .activeWorkspace.id'")
+(deflisten workspaces-1 :initial "[]"
+  "~/.cargo/bin/hyprland-workspaces HDMI-A-1")
 
 (defpoll time :interval "10s"
   "LC_ALL=C date '+%A %H:%M'")
 
 (defpoll battery :interval "30s"
-  "cat /sys/class/power_supply/BAT0/capacity")
+  "cat /sys/class/power_supply/macsmc-battery/capacity")
 
 (defpoll battery-status :interval "30s"
-  "cat /sys/class/power_supply/BAT0/status")
+  "cat /sys/class/power_supply/macsmc-battery/status")
 
 (deflisten volume :initial "0"
   "/home/simonb/.config/eww/scripts/volume")
@@ -22,48 +22,32 @@
 (defpoll bt-powered :interval "5s"
   "bluetoothctl show | awk '/Powered:/{print $2}'")
 
-(defwidget ws-btn [num active]
-  (button
-    :class {active == num ? "workspace active" : "workspace"}
-    :valign "center"
-    :onclick "hyprctl dispatch workspace ${num}"
-    num))
-
-(defwidget workspaces []
+(defwidget workspaces [spaces]
   (box :orientation "h"
        :space-evenly false
        :spacing 10
-    (ws-btn :num 1 :active active-workspace-0)
-    (ws-btn :num 2 :active active-workspace-0)
-    (ws-btn :num 3 :active active-workspace-0)
-    (ws-btn :num 4 :active active-workspace-0)
-    (ws-btn :num 5 :active active-workspace-0)))
-
-(defwidget workspaces2 []
-  (box :orientation "h"
-       :space-evenly false
-       :spacing 10
-    (ws-btn :num 6 :active active-workspace-1)
-    (ws-btn :num 7 :active active-workspace-1)
-    (ws-btn :num 8 :active active-workspace-1)
-    (ws-btn :num 9 :active active-workspace-1)
-    (ws-btn :num 10 :active active-workspace-1)))
+    (for ws in spaces
+      (button
+        :class {ws.class}
+        :valign "center"
+        :onclick "hyprctl dispatch workspace ${ws.id}"
+        {ws.name}))))
 
 (defwidget right []
   (box :orientation "h"
        :space-evenly false
        :halign "end"
        :valign "center"
-       :spacing 14
-    (button :class "icon"
-            :valign "center"
-            :onclick "blueman-manager &"
-            {bt-powered == "yes" ? "󰂯" : "󰂲"})
-    (box :orientation "h" :space-evenly false :valign "center" :spacing 4
+    (box :class "right-group" :orientation "h" :space-evenly false :valign "center"
+      (button :class "icon"
+              :valign "center"
+              :onclick "blueman-manager &"
+              {bt-powered == "yes" ? "󰂯" : "󰂲"}))
+    (box :class "right-group" :orientation "h" :space-evenly false :valign "center" :spacing 4
       (label :class "icon" :valign "center"
              :text {muted == "1" ? "󰝟" : volume > 66 ? "󰕾" : volume > 33 ? "󰖀" : "󰕿"})
       (label :class "stat" :valign "center" :text "${volume}%"))
-    (box :orientation "h" :space-evenly false :valign "center" :spacing 4
+    (box :class "right-group" :orientation "h" :space-evenly false :valign "center" :spacing 4
       (label :class "icon" :valign "center"
              :text {battery-status == "Charging" ? "󰂄" : "󰁹"})
       (label :class "stat" :valign "center" :text "${battery}%"))))
@@ -71,14 +55,14 @@
 (defwidget bar-layout []
   (centerbox :orientation "h"
              :class "bar"
-    (workspaces)
+    (workspaces :spaces workspaces-0)
     (label :class "date" :text time)
     (right)))
 
 (defwidget bar-layout2 []
   (centerbox :orientation "h"
              :class "bar"
-    (workspaces2)
+    (workspaces :spaces workspaces-1)
     (label :class "date" :text time)
     (right)))
 
