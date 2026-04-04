@@ -69,7 +69,7 @@ esac
 
 # Install Firefox policies (auto-installs extensions)
 sudo mkdir -p /etc/firefox/policies
-sudo cp "$DOTFILES/firefox/policies.json" /etc/firefox/policies/policies.json
+cat "$DOTFILES/firefox/policies.json" | sudo tee /etc/firefox/policies/policies.json > /dev/null
 
 # Install Firefox user.js into active profile
 install_firefox_userjs() {
