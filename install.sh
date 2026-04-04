@@ -67,6 +67,10 @@ case "$OS" in
         ;;
 esac
 
+# Install Firefox policies (auto-installs extensions)
+sudo mkdir -p /etc/firefox/policies
+sudo cp "$DOTFILES/firefox/policies.json" /etc/firefox/policies/policies.json
+
 # Install Firefox user.js into active profile
 install_firefox_userjs() {
     local profile_dir="$1"
