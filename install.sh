@@ -92,5 +92,9 @@ elif [ -d "$HOME/Library/Application Support/Firefox" ]; then
     install_firefox_userjs "$HOME/Library/Application Support/Firefox"
 fi
 
+# Claude Code global instructions
+cd "$DOTFILES"
+stow --adopt -t ~ claude
+
 echo "Done!"
 echo "On first nvim launch, LazyVim will bootstrap and install plugins automatically."

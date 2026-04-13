@@ -38,16 +38,17 @@
        :space-evenly false
        :halign "end"
        :valign "center"
-    (box :class "right-group" :orientation "h" :space-evenly false :valign "center"
-      (button :class "icon"
-              :valign "center"
-              :onclick "blueman-manager &"
-              {bt-powered == "yes" ? "󰂯" : "󰂲"}))
-    (box :class "right-group" :orientation "h" :space-evenly false :valign "center" :spacing 4
+       :spacing 8
+    (button :valign "center"
+            :onclick "blueman-manager &"
+      (box :class "bt-btn"
+        (label :class "icon" :valign "center"
+               :text {bt-powered == "yes" ? "󰂯" : "󰂲"})))
+    (box :orientation "h" :space-evenly false :valign "center" :spacing 4
       (label :class "icon" :valign "center"
              :text {muted == "1" ? "󰝟" : volume > 66 ? "󰕾" : volume > 33 ? "󰖀" : "󰕿"})
       (label :class "stat" :valign "center" :text "${volume}%"))
-    (box :class "right-group" :orientation "h" :space-evenly false :valign "center" :spacing 4
+    (box :orientation "h" :space-evenly false :valign "center" :spacing 4
       (label :class "icon" :valign "center"
              :text {battery-status == "Charging" ? "󰂄" : "󰁹"})
       (label :class "stat" :valign "center" :text "${battery}%"))))

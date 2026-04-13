@@ -1,0 +1,15 @@
+xkb_keymap {
+    xkb_keycodes { include "evdev+aliases(qwerty)" };
+    xkb_types    { include "complete" };
+    xkb_compat   { include "complete" };
+    xkb_symbols  {
+        include "pc+us+inet(evdev)"
+
+        // Option (⌥) → Super
+        key <LALT> { [ Super_L ] };
+        key <RALT> { [ Super_R ] };
+
+        modifier_map Mod4 { <LALT>, <RALT> };
+    };
+    xkb_geometry { include "pc(pc105)" };
+};
