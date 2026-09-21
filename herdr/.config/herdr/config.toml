@@ -37,6 +37,33 @@ swap_pane_right = "prefix+alt+l"
 show_agent_labels_on_pane_borders = true
 sidebar_width = 34
 sidebar_max_width = 48
+prompt_new_tab_name = false  # new tabs open straight away with a generated name
 
 [ui.sidebar.agents]
+row_gap = 0
 rows = [["state_icon", "machine", "$kind"], ["agent"]]
+
+[theme]
+# macOS system colors on top of the terminal theme, which takes its base colors from Ghostty.
+# No auto_switch: herdr misdetected light mode inside Ghostty and painted the sidebar white.
+name = "terminal"
+
+[theme.custom]
+panel_bg = "reset"          # tab bar blends into the window
+sidebar_bg = "reset"        # same surface as the content, so the glass shows through
+active_row_bg = "#3a3a3c"   # macOS selected row
+selection_bg = "#3f638b"    # matches Ghostty's text selection
+surface0 = "#2c2c2e"        # inactive tabs
+surface_dim = "#38383a"     # dividers, macOS separator
+accent = "#aeaeb2"          # active tab: soft light-gray pill, dark label stays readable
+text = "#e5e5e7"
+subtext0 = "#98989d"        # secondary labels
+overlay0 = "#8e8e93"        # section headers
+overlay1 = "#98989d"
+red = "#ff453a"
+green = "#32d74b"
+yellow = "#ffd60a"
+blue = "#0a84ff"
+teal = "#64d2ff"
+peach = "#ff9f0a"
+mauve = "#bf5af2"

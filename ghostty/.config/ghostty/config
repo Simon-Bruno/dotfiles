@@ -1,10 +1,23 @@
+# Native macOS look: Apple's Terminal colors (follow light/dark mode), Liquid Glass
+theme = light:Apple System Colors Light,dark:Apple System Colors
+window-theme = system
+# Slim title bar with the close/minimize/zoom buttons; it takes the window's glass background.
+# Ghostty's tab bar only appears if you open Ghostty tabs; herdr has its own.
+macos-titlebar-style = transparent
+macos-titlebar-proxy-icon = hidden
+# Liquid Glass: see-through window with the native macOS 26 glass material
+background-opacity = 0.75
+# Apple's dim gray (#464646) disappears on glass; use the macOS secondary-label gray instead
+palette = 8=#8e8e93
+background-blur = macos-glass-regular
+window-colorspace = display-p3
+
+font-family = SF Mono
 font-size = 12
-theme = Everblush
-window-padding-x = 8
-window-padding-y = 8
+window-padding-x = 16
+window-padding-y = 14
 window-inherit-font-size = true
-adjust-cell-height = 6
-selection-background = "dim gray"
+adjust-cell-height = 10
 copy-on-select = clipboard
 right-click-action = paste
 macos-option-as-alt = left
