@@ -23,8 +23,9 @@ case "$OS" in
             exit 1
         fi
         brew install neovim stow git firefox
+        brew install --cask ghostty karabiner-elements
         cd "$DOTFILES"
-        stow -t ~ nvim
+        stow -t ~ nvim ghostty herdr karabiner codex
         ;;
     arch|endeavouros|manjaro)
         if command -v yay &>/dev/null; then

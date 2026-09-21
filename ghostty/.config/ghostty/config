@@ -1,0 +1,25 @@
+font-size = 12
+theme = Everblush
+window-padding-x = 8
+window-padding-y = 8
+window-inherit-font-size = true
+adjust-cell-height = 6
+selection-background = "dim gray"
+copy-on-select = clipboard
+right-click-action = paste
+macos-option-as-alt = left
+keybind = cmd+k=text:\x1b[24;2~
+keybind = super+t=text:\x14
+initial-command = /Users/simonbruno/.local/bin/herdr
+keybind = super+w=text:\x00X
+
+# Ctrl+1..9 switches herdr tabs by sending the prefix plus the digit (herdr's default switch_tab).
+keybind = ctrl+1=text:\x001
+keybind = ctrl+2=text:\x002
+keybind = ctrl+3=text:\x003
+keybind = ctrl+4=text:\x004
+keybind = ctrl+5=text:\x005
+keybind = ctrl+6=text:\x006
+keybind = ctrl+7=text:\x007
+keybind = ctrl+8=text:\x008
+keybind = ctrl+9=text:\x009
