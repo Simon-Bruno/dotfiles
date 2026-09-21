@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Build the latest herdr release with the patches in ~/.config/herdr/patches
+# and make it the `herdr` on PATH (~/.local/bin/herdr).
+#
+#   herdr-patched-update           latest stable release
+#   herdr-patched-update v0.9.1    a specific tag
+#
+# If a patch no longer applies, nothing is installed and your current herdr keeps working.
+# Needs rustup, zig (brew install rustup zig) and gh.
+set -euo pipefail
+
+export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/rustup/bin:$PATH"
+SRC="$HOME/.cache/herdr-src"
+PATCHES="$HOME/.config/herdr/patches"
+PREFIX="$HOME/.local/herdr-patched"
+
+tag="${1:-$(gh api repos/herdrdev/herdr/releases/latest --jq .tag_name)}"
+echo "Building herdr $tag with patches from $PATCHES"
+
+[ -d "$SRC/.git" ] || git clone --quiet https://github.com/herdrdev/herdr.git "$SRC"
+git -C "$SRC" fetch --quiet --tags --force origin
+git -C "$SRC" checkout --quiet --force "$tag"
+git -C "$SRC" clean -fdq
+
+for patch in "$PATCHES"/*.patch; do
+    if ! git -C "$SRC" apply "$patch"; then
+        echo "Patch no longer applies to $tag: $(basename "$patch")" >&2
+        echo "Nothing installed; your current herdr is unchanged." >&2
+        exit 1
+    fi
+    echo "Applied $(basename "$patch")"
+done
+
+cargo install --quiet --locked --force --path "$SRC" --root "$PREFIX"
+ln -sf "$PREFIX/bin/herdr" "$HOME/.local/bin/herdr"
+echo "Installed: $("$HOME/.local/bin/herdr" --version)"
+echo "Open a new Ghostty window to use it."
+echo "The running server keeps the old version until it restarts (herdr server stop ends running agents)."

@@ -1,0 +1,460 @@
+diff --git a/src/client/shell/agent_sidebar.rs b/src/client/shell/agent_sidebar.rs
+index e43ab8cc..07711ad7 100644
+--- a/src/client/shell/agent_sidebar.rs
++++ b/src/client/shell/agent_sidebar.rs
+@@ -97,12 +97,14 @@ pub(super) fn render_agent_panel_header(
+     if area.height == 0 {
+         return false;
+     }
++    // Section line spans the label text only: from under " agents" to the end of the sort label.
++    let line_width = super::sidebar::right_label_area(area).width.saturating_sub(1);
+     put_text(
+         buffer,
+-        area.x,
++        area.x.saturating_add(1),
+         area.y,
+-        area.width,
+-        &"─".repeat(area.width as usize),
++        line_width,
++        &"─".repeat(line_width as usize),
+         Style::default().fg(config.palette.surface_dim),
+     );
+     if area.height < 2 {
+@@ -122,9 +124,10 @@ pub(super) fn render_agent_panel_header(
+         crate::config::AgentPanelSortConfig::Spaces => "grouped",
+         crate::config::AgentPanelSortConfig::Priority => "priority",
+     });
+-    let sort_width = display_width(sort_label).min(area.width as usize) as u16;
++    let label_area = super::sidebar::right_label_area(area);
++    let sort_width = display_width(sort_label).min(label_area.width as usize) as u16;
+     let sort_rect = Rect::new(
+-        area.right().saturating_sub(sort_width),
++        label_area.right().saturating_sub(sort_width),
+         area.y + 1,
+         sort_width,
+         1,
+@@ -162,11 +165,13 @@ pub(super) fn render_agent_list<T>(
+     row_lines: impl Fn(&T) -> usize,
+     mut render_row: impl FnMut(&mut Buffer, Rect, &T, &mut ShellHitMap),
+ ) {
++    // Divider row and header row, then `header_gap` blank rows before the first entry.
++    let header_rows = 2 + config.sidebar_header_gap;
+     let body = Rect::new(
+         area.x,
+-        area.y.saturating_add(3),
++        area.y.saturating_add(header_rows),
+         area.width,
+-        area.height.saturating_sub(3),
++        area.height.saturating_sub(header_rows),
+     );
+     hits.agent_body = body;
+     if body.is_empty() || rows.is_empty() {
+diff --git a/src/client/shell/config.rs b/src/client/shell/config.rs
+index 2d16b00f..dae653af 100644
+--- a/src/client/shell/config.rs
++++ b/src/client/shell/config.rs
+@@ -120,9 +120,13 @@ impl ClientShellConfig {
+             sidebar_collapsed_mode: config.ui.sidebar_collapsed_mode,
+             mobile_width_threshold: config.ui.mobile_width_threshold,
+             tab_bar_position: config.ui.tab_bar_position,
++            tab_bar_gap: config.ui.tab_bar_gap,
+             hide_tab_bar_when_single_tab: config.ui.hide_tab_bar_when_single_tab,
+             spaces: config.ui.sidebar.spaces.clone(),
+             agents: config.ui.sidebar.agents.clone(),
++            sidebar_inset_right: config.ui.sidebar.inset_right,
++            sidebar_header_gap: config.ui.sidebar.header_gap,
++            sidebar_divider: config.ui.sidebar.divider.clone(),
+             agent_panel_sort: config.ui.agent_panel_sort,
+             status_indicators: config.ui.status_indicators,
+             sound_enabled: config.ui.sound.enabled,
+@@ -322,9 +326,13 @@ impl ClientShellConfig {
+                 self.sidebar_collapsed_mode = ui.sidebar_collapsed_mode;
+                 self.mobile_width_threshold = ui.mobile_width_threshold;
+                 self.tab_bar_position = ui.tab_bar_position;
++                self.tab_bar_gap = ui.tab_bar_gap;
+                 self.hide_tab_bar_when_single_tab = ui.hide_tab_bar_when_single_tab;
+                 self.spaces = ui.sidebar.spaces.clone();
+                 self.agents = ui.sidebar.agents.clone();
++                self.sidebar_inset_right = ui.sidebar.inset_right;
++                self.sidebar_header_gap = ui.sidebar.header_gap;
++                self.sidebar_divider = ui.sidebar.divider.clone();
+                 self.agent_panel_sort = ui.agent_panel_sort;
+                 self.status_indicators = ui.status_indicators;
+                 self.sound_enabled = ui.sound.enabled;
+@@ -392,14 +400,20 @@ impl ClientShellConfig {
+         let main = Rect::new(sidebar_width, 0, cols.saturating_sub(sidebar_width), rows);
+         let show_tab_bar = rows > 1 && !(self.hide_tab_bar_when_single_tab && tab_count == 1);
+         let tab_height = u16::from(show_tab_bar);
++        // Blank rows between the tab row and the panes; never let them swallow the panes.
++        let gap = if show_tab_bar && rows > tab_height + self.tab_bar_gap + 1 {
++            self.tab_bar_gap
++        } else {
++            0
++        };
+         let (tab_bar, pane_surface) = match self.tab_bar_position {
+             TabBarPositionConfig::Top => (
+                 Rect::new(main.x, 0, main.width, tab_height),
+                 Rect::new(
+                     main.x,
+-                    tab_height,
++                    tab_height + gap,
+                     main.width,
+-                    rows.saturating_sub(tab_height),
++                    rows.saturating_sub(tab_height + gap),
+                 ),
+             ),
+             TabBarPositionConfig::Bottom => (
+@@ -409,7 +423,7 @@ impl ClientShellConfig {
+                     main.width,
+                     tab_height,
+                 ),
+-                Rect::new(main.x, 0, main.width, rows.saturating_sub(tab_height)),
++                Rect::new(main.x, 0, main.width, rows.saturating_sub(tab_height + gap)),
+             ),
+         };
+ 
+diff --git a/src/client/shell/endpoint_sidebar.rs b/src/client/shell/endpoint_sidebar.rs
+index 34d2ccdc..d1e6a48c 100644
+--- a/src/client/shell/endpoint_sidebar.rs
++++ b/src/client/shell/endpoint_sidebar.rs
+@@ -20,7 +20,7 @@ pub(super) fn render_collapsed(
+     hits: &mut ShellHitMap,
+ ) {
+     let palette = &config.palette;
+-    super::render::render_sidebar_background(buffer, area, palette);
++    super::render::render_sidebar_background(buffer, area, config);
+     let (workspace_area, divider_y, detail_area) = super::sidebar::collapsed_sidebar_sections(area);
+     let mut total_rows = 0usize;
+     let mut selected_row = None;
+@@ -223,16 +223,16 @@ pub(super) fn render_expanded(
+     hits: &mut ShellHitMap,
+ ) {
+     let palette = &config.palette;
+-    super::render::render_sidebar_background(buffer, area, palette);
++    super::render::render_sidebar_background(buffer, area, config);
+     hits.sidebar_divider = if area.is_empty() {
+         Rect::default()
+     } else {
+         Rect::new(area.right().saturating_sub(1), area.y, 1, area.height)
+     };
+     let (workspace_area, detail_area) =
+-        crate::ui::expanded_sidebar_sections(area, state.sidebar_section_split);
++        crate::ui::expanded_sidebar_sections(area, state.sidebar_section_split, config.sidebar_inset_right);
+     hits.sidebar_section_divider =
+-        crate::ui::sidebar_section_divider_rect(area, state.sidebar_section_split);
++        crate::ui::sidebar_section_divider_rect(area, state.sidebar_section_split, config.sidebar_inset_right);
+     put_text(
+         buffer,
+         workspace_area.x,
+@@ -274,11 +274,11 @@ pub(super) fn render_expanded(
+     }
+     let body = Rect::new(
+         workspace_area.x,
+-        workspace_area.y.saturating_add(WORKSPACE_HEADER_ROWS),
++        workspace_area.y.saturating_add(1 + config.sidebar_header_gap),
+         workspace_area.width,
+         workspace_area
+             .height
+-            .saturating_sub(WORKSPACE_HEADER_ROWS + 1),
++            .saturating_sub(2 + config.sidebar_header_gap),
+     );
+     hits.workspace_body = body;
+     let row_heights = rows
+@@ -514,17 +514,18 @@ pub(super) fn render_expanded(
+             &label,
+             Style::default().fg(palette.overlay0),
+         );
++        let label_area = super::sidebar::right_label_area(workspace_area);
+         let attention = active_snapshot.is_some_and(super::global_menu::global_menu_attention);
+-        let width = if attention { 8 } else { 6 }.min(workspace_area.width);
++        let width = if attention { 8 } else { 6 }.min(label_area.width);
+         hits.global_launcher = Rect::new(
+-            workspace_area.right().saturating_sub(width),
++            label_area.right().saturating_sub(width),
+             footer_y,
+             width,
+             1,
+         );
+         put_right_text(
+             buffer,
+-            workspace_area,
++            label_area,
+             footer_y,
+             if attention { "● menu" } else { "menu" },
+             Style::default().fg(if attention {
+@@ -545,7 +546,9 @@ pub(super) fn render_expanded(
+         hits,
+     );
+     hits.sidebar_toggle = Rect::new(
+-        area.right().saturating_sub(2),
++        crate::ui::expanded_sidebar_content(area, config.sidebar_inset_right)
++            .right()
++            .saturating_sub(2),
+         area.bottom().saturating_sub(1),
+         u16::from(area.width > 1),
+         u16::from(area.height > 0),
+diff --git a/src/client/shell/render.rs b/src/client/shell/render.rs
+index 80387019..cc6ed7eb 100644
+--- a/src/client/shell/render.rs
++++ b/src/client/shell/render.rs
+@@ -16,13 +16,14 @@ pub(super) use tabs::{render_tab_bar, tab_bar_status_width};
+ pub(in crate::client::shell) fn render_sidebar_background(
+     buffer: &mut Buffer,
+     area: Rect,
+-    palette: &Palette,
++    config: &ClientShellConfig,
+ ) {
++    let palette = &config.palette;
+     buffer.set_style(area, Style::default().bg(palette.sidebar_bg));
+     let separator_x = area.right().saturating_sub(1);
+     for y in area.y..area.bottom() {
+         if let Some(cell) = buffer.cell_mut((separator_x, y)) {
+-            cell.set_symbol("│");
++            cell.set_symbol(&config.sidebar_divider);
+             cell.set_style(Style::default().fg(palette.surface_dim));
+         }
+     }
+diff --git a/src/client/shell/sidebar.rs b/src/client/shell/sidebar.rs
+index 161aecd5..7c1edb71 100644
+--- a/src/client/shell/sidebar.rs
++++ b/src/client/shell/sidebar.rs
+@@ -33,7 +33,7 @@ pub(crate) fn render_collapsed_sidebar(
+     hits: &mut ShellHitMap,
+ ) {
+     let palette = &config.palette;
+-    render_sidebar_background(buffer, area, palette);
++    render_sidebar_background(buffer, area, config);
+     let (workspace_area, divider_y, detail_area) = collapsed_sidebar_sections(area);
+     for (index, workspace) in snapshot
+         .workspaces
+@@ -189,16 +189,16 @@ pub(crate) fn render_sidebar(
+     hits: &mut ShellHitMap,
+ ) {
+     let palette = &config.palette;
+-    render_sidebar_background(buffer, area, palette);
++    render_sidebar_background(buffer, area, config);
+     hits.sidebar_divider = if area.is_empty() {
+         Rect::default()
+     } else {
+         Rect::new(area.right().saturating_sub(1), area.y, 1, area.height)
+     };
+     let (workspace_area, detail_area) =
+-        crate::ui::expanded_sidebar_sections(area, state.sidebar_section_split);
++        crate::ui::expanded_sidebar_sections(area, state.sidebar_section_split, config.sidebar_inset_right);
+     hits.sidebar_section_divider =
+-        crate::ui::sidebar_section_divider_rect(area, state.sidebar_section_split);
++        crate::ui::sidebar_section_divider_rect(area, state.sidebar_section_split, config.sidebar_inset_right);
+     put_text(
+         buffer,
+         workspace_area.x,
+@@ -213,11 +213,11 @@ pub(crate) fn render_sidebar(
+     let entries = workspace_entries(snapshot, state.collapsed_groups);
+     let body = Rect::new(
+         workspace_area.x,
+-        workspace_area.y.saturating_add(WORKSPACE_HEADER_ROWS),
++        workspace_area.y.saturating_add(1 + config.sidebar_header_gap),
+         workspace_area.width,
+         workspace_area
+             .height
+-            .saturating_sub(WORKSPACE_HEADER_ROWS + 1),
++            .saturating_sub(2 + config.sidebar_header_gap),
+     );
+     hits.workspace_body = body;
+     let row_heights = entries
+@@ -375,16 +375,18 @@ pub(crate) fn render_sidebar(
+             " new",
+             Style::default().fg(palette.overlay0),
+         );
++        // Right-hand labels keep one blank column before the edge, mirroring the leading space of " new".
++        let label_area = right_label_area(workspace_area);
+         let attention = super::super::global_menu::global_menu_attention(snapshot);
+-        let launcher_width = if attention { 8 } else { 6 }.min(workspace_area.width);
++        let launcher_width = if attention { 8 } else { 6 }.min(label_area.width);
+         hits.global_launcher = Rect::new(
+-            workspace_area.right().saturating_sub(launcher_width),
++            label_area.right().saturating_sub(launcher_width),
+             footer_y,
+             launcher_width,
+             1,
+         );
+         if attention {
+-            let start_x = workspace_area.right().saturating_sub(6);
++            let start_x = label_area.right().saturating_sub(6);
+             put_text(
+                 buffer,
+                 start_x,
+@@ -406,7 +408,7 @@ pub(crate) fn render_sidebar(
+         } else {
+             put_right_text(
+                 buffer,
+-                workspace_area,
++                label_area,
+                 footer_y,
+                 "menu",
+                 Style::default().fg(palette.overlay0),
+@@ -424,7 +426,9 @@ pub(crate) fn render_sidebar(
+     );
+ 
+     hits.sidebar_toggle = Rect::new(
+-        area.right().saturating_sub(2),
++        crate::ui::expanded_sidebar_content(area, config.sidebar_inset_right)
++            .right()
++            .saturating_sub(2),
+         area.bottom().saturating_sub(1),
+         u16::from(area.width > 1),
+         u16::from(area.height > 0),
+@@ -733,3 +737,9 @@ pub(in crate::client::shell) fn render_workspace_rows(
+         }
+     }
+ }
++
++/// Area for right-aligned sidebar labels: one blank column before the right edge,
++/// mirroring the one-column indent of left labels.
++pub(in crate::client::shell) fn right_label_area(area: Rect) -> Rect {
++    Rect::new(area.x, area.y, area.width.saturating_sub(1), area.height)
++}
+diff --git a/src/client/shell/state.rs b/src/client/shell/state.rs
+index 901c5a28..83e33f9f 100644
+--- a/src/client/shell/state.rs
++++ b/src/client/shell/state.rs
+@@ -2,7 +2,6 @@ use super::*;
+ 
+ pub(super) const MIN_TAB_WIDTH: u16 = 8;
+ pub(super) const NEW_TAB_WIDTH: u16 = 3;
+-pub(super) const WORKSPACE_HEADER_ROWS: u16 = 2;
+ const ENDPOINT_ERROR_TIMEOUT_SECS: u64 = 5;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+@@ -20,9 +19,13 @@ pub(crate) struct ClientShellConfig {
+     pub(super) sidebar_collapsed_mode: SidebarCollapsedModeConfig,
+     pub(super) mobile_width_threshold: u16,
+     pub(super) tab_bar_position: TabBarPositionConfig,
++    pub(super) tab_bar_gap: u16,
+     pub(super) hide_tab_bar_when_single_tab: bool,
+     pub(super) spaces: SpacesSidebarConfig,
+     pub(super) agents: crate::config::AgentsSidebarConfig,
++    pub(super) sidebar_inset_right: u16,
++    pub(super) sidebar_header_gap: u16,
++    pub(super) sidebar_divider: String,
+     pub(super) agent_panel_sort: crate::config::AgentPanelSortConfig,
+     pub(super) status_indicators: crate::config::StatusIndicatorStyle,
+     pub(super) sound_enabled: bool,
+diff --git a/src/client/shell/tests/chrome_context.rs b/src/client/shell/tests/chrome_context.rs
+index ed21bc8a..70d5feb2 100644
+--- a/src/client/shell/tests/chrome_context.rs
++++ b/src/client/shell/tests/chrome_context.rs
+@@ -523,3 +523,7 @@ fn close_confirmation_error_becomes_client_owned_overlay_and_stable_group_close(
+             if params.workspace_id == "ws_1" && params.close_group
+     ));
+ }
++
++
++
++
+diff --git a/src/config/model.rs b/src/config/model.rs
+index 6ef6274d..763512cf 100644
+--- a/src/config/model.rs
++++ b/src/config/model.rs
+@@ -948,6 +948,8 @@ pub struct UiConfig {
+     pub hide_tab_bar_when_single_tab: bool,
+     /// Desktop tab row placement. Default: top.
+     pub tab_bar_position: TabBarPositionConfig,
++    /// Blank rows between the desktop tab row and the panes. Default: 0.
++    pub tab_bar_gap: u16,
+     /// Ordered entries shown at the right edge of the desktop tab row. Empty by default.
+     pub tab_bar_right: Vec<TabBarRightEntryConfig>,
+     /// Text inserted between visible right-side tab bar entries. Default: one space.
+@@ -1180,6 +1182,7 @@ impl Default for UiConfig {
+             show_agent_labels_on_pane_borders: false,
+             hide_tab_bar_when_single_tab: false,
+             tab_bar_position: TabBarPositionConfig::Top,
++            tab_bar_gap: 0,
+             tab_bar_right: Vec::new(),
+             tab_bar_right_separator: " ".into(),
+             window_title: super::window_title::default_window_title(),
+diff --git a/src/config/sidebar.rs b/src/config/sidebar.rs
+index 9a4cb5e0..310fbd34 100644
+--- a/src/config/sidebar.rs
++++ b/src/config/sidebar.rs
+@@ -475,11 +475,29 @@ impl Default for SpacesSidebarConfig {
+     }
+ }
+ 
+-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
++#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+ #[serde(default)]
+ pub struct SidebarConfig {
+     pub agents: AgentsSidebarConfig,
+     pub spaces: SpacesSidebarConfig,
++    /// Blank columns between the sidebar content and its divider.
++    pub inset_right: u16,
++    /// Blank rows between a section header and its first entry.
++    pub header_gap: u16,
++    /// Character drawn for the vertical divider between sidebar and panes.
++    pub divider: String,
++}
++
++impl Default for SidebarConfig {
++    fn default() -> Self {
++        Self {
++            agents: AgentsSidebarConfig::default(),
++            spaces: SpacesSidebarConfig::default(),
++            inset_right: 0,
++            header_gap: 1,
++            divider: "│".into(),
++        }
++    }
+ }
+ 
+ #[cfg(test)]
+diff --git a/src/ui.rs b/src/ui.rs
+index 141e09d3..53f47a51 100644
+--- a/src/ui.rs
++++ b/src/ui.rs
+@@ -32,7 +32,7 @@ pub(crate) use self::scrollbar::{
+     scrollbar_thumb_grab_offset,
+ };
+ pub(crate) use self::sidebar::{
+-    agent_panel_entries_from, expanded_sidebar_sections, resolved_token_spans, sidebar_agent_rows,
++    agent_panel_entries_from, expanded_sidebar_content, expanded_sidebar_sections, resolved_token_spans, sidebar_agent_rows,
+     sidebar_section_divider_rect, sidebar_space_rows, AgentPanelEntry, AgentTokenContext,
+     ResolvedToken, ResolvedTokenKind, SpaceTokenContext,
+ };
+diff --git a/src/ui/sidebar.rs b/src/ui/sidebar.rs
+index cbf6f1a9..520cd08b 100644
+--- a/src/ui/sidebar.rs
++++ b/src/ui/sidebar.rs
+@@ -47,8 +47,20 @@ fn sidebar_section_heights(total_height: u16, split_ratio: f32) -> (u16, u16) {
+     )
+ }
+ 
+-pub(crate) fn expanded_sidebar_sections(area: Rect, split_ratio: f32) -> (Rect, Rect) {
+-    let content = Rect::new(area.x, area.y, area.width.saturating_sub(1), area.height);
++/// Sidebar content area: excludes the divider column and `inset_right` blank columns before it.
++pub(crate) fn expanded_sidebar_content(area: Rect, inset_right: u16) -> Rect {
++    let width = area.width.saturating_sub(1);
++    // Never let the inset swallow a narrow sidebar.
++    let inset = if width > inset_right.saturating_mul(4) { inset_right } else { 0 };
++    Rect::new(area.x, area.y, width - inset, area.height)
++}
++
++pub(crate) fn expanded_sidebar_sections(
++    area: Rect,
++    split_ratio: f32,
++    inset_right: u16,
++) -> (Rect, Rect) {
++    let content = expanded_sidebar_content(area, inset_right);
+     if content.is_empty() {
+         return (Rect::default(), Rect::default());
+     }
+@@ -65,8 +77,8 @@ pub(crate) fn expanded_sidebar_sections(area: Rect, split_ratio: f32) -> (Rect,
+     )
+ }
+ 
+-pub(crate) fn sidebar_section_divider_rect(area: Rect, split_ratio: f32) -> Rect {
+-    let content = Rect::new(area.x, area.y, area.width.saturating_sub(1), area.height);
++pub(crate) fn sidebar_section_divider_rect(area: Rect, split_ratio: f32, inset_right: u16) -> Rect {
++    let content = expanded_sidebar_content(area, inset_right);
+     if content.width == 0 || content.height < 6 {
+         return Rect::default();
+     }

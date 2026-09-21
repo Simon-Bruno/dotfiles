@@ -19,7 +19,8 @@ window-colorspace = display-p3
 
 font-family = SF Mono
 font-size = 12
-window-padding-x = 16
+# Left margin 15pt = exactly two text columns (SF Mono 12pt is 7.5pt wide), so herdr can mirror it before its divider (inset_right = 2).
+window-padding-x = 15,16
 window-padding-y = 14
 window-inherit-font-size = true
 adjust-cell-height = 10

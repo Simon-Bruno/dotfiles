@@ -34,15 +34,24 @@ swap_pane_up = "prefix+alt+k"
 swap_pane_right = "prefix+alt+l"
 
 [ui]
+tab_bar_gap = 1  # blank row under the tab bar, so panes start level with the first space (matches header_gap; local herdr patch)
 pane_scrollbars = false  # no scrollbar column on the right of each pane
 show_agent_labels_on_pane_borders = true
 sidebar_width = 34
 sidebar_max_width = 48
 prompt_new_tab_name = false  # new tabs open straight away with a generated name
 
+# Sidebar spacing and divider. These three settings come from our local herdr patch
+# (~/.config/herdr/patches); stock herdr ignores them. Apply changes with: herdr server reload-config
+[ui.sidebar]
+inset_right = 2      # blank columns between the sidebar content (lines, highlights) and the divider
+header_gap = 1       # blank rows between a section header and its first entry
+divider = "▏"        # line on the left edge of its column, so lines and highlights meet it exactly
+
 [ui.sidebar.agents]
 row_gap = 0
-rows = [["state_icon", "machine", "$kind"], ["agent"]]
+# $kind and $label come from the namer (~/.config/herdr/namer); $label is "new session" until it names the agent.
+rows = [["state_icon", "machine", "$kind"], ["$label"]]
 
 [theme]
 # macOS system colors on top of the terminal theme, which takes its base colors from Ghostty.
