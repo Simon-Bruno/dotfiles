@@ -15,13 +15,18 @@ import sys
 import time
 
 MODEL = "sonnet"
+# Names a brand-new agent within one tick instead of waiting for the next full naming round.
+NEW_AGENT_MODEL = "haiku"
 MODEL_EVERY_SECONDS = 300
 RECENT_MESSAGES = 10
 TERMINAL_LINES = 12
+AGENT_SCREEN_LINES = 40
 MESSAGE_CHARS = 300
 STATE_DIR = os.path.expanduser("~/.config/herdr/namer/state")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+# Sidebar filler for an agent the model has not named yet.
+PLACEHOLDER = "new session"
 
 SCHEMA = {
     "type": "object",
@@ -84,15 +89,28 @@ def herdr(*args):
     return json.loads(out.stdout) if out.stdout.strip() else {}
 
 
-def terminal(pane):
+def terminal(pane, lines=TERMINAL_LINES):
     """What a non-agent pane is doing: its foreground command, folder and last lines of output."""
     info = herdr("pane", "process-info", "--pane", pane["pane_id"])["result"]["process_info"]
     running = " ".join(p.get("cmdline", "")[:80] for p in info.get("foreground_processes", []))
     out = subprocess.run(["herdr", "pane", "read", pane["pane_id"], "--source", "recent-unwrapped",
-                          "--lines", str(TERMINAL_LINES)], capture_output=True, text=True, timeout=30)
-    lines = [" ".join(l.split())[:150] for l in out.stdout.splitlines() if l.strip()][-TERMINAL_LINES:]
+                          "--lines", str(lines)], capture_output=True, text=True, timeout=30)
+    output = [" ".join(l.split())[:150] for l in out.stdout.splitlines() if l.strip()][-lines:]
     return {"pane_id": pane["pane_id"], "running": running,
-            "cwd": pane.get("foreground_cwd") or pane.get("cwd") or "", "output": lines}
+            "cwd": pane.get("foreground_cwd") or pane.get("cwd") or "", "output": output}
+
+
+def pane_title(pane):
+    """A short border label for a pane without a named agent: its running command, or its folder when idle."""
+    info = pane["process_info"]
+    procs = [p for p in info.get("foreground_processes", []) if p.get("pid") != info.get("shell_pid")]
+    if procs:
+        argv = procs[0].get("argv") or [procs[0].get("name", "")]
+        return " ".join(os.path.basename(a) for a in argv)[:32]
+    cwd = pane.get("foreground_cwd") or pane.get("cwd") or ""
+    folder = "~" if cwd == os.path.expanduser("~") else os.path.basename(cwd)
+    shell = next((p.get("name") for p in info.get("foreground_processes", [])), None) or "shell"
+    return f"{shell} {folder}".strip()
 
 
 def text_of(content):
@@ -188,7 +206,7 @@ def save_state(state):
     os.replace(tmp, STATE_FILE)
 
 
-def ask_model(agents, tabs):
+def ask_model(agents, tabs, model=MODEL):
     parts = [INSTRUCTIONS, ""]
     for tab_id, tab in tabs.items():
         header = f"TAB {tab_id}"
@@ -207,8 +225,11 @@ def ask_model(agents, tabs):
             parts.extend(f"    | {line}" for line in t["output"])
         parts.append("")
     out = subprocess.run(
-        ["claude", "-p", "--model", MODEL, "--output-format", "json", "--json-schema", json.dumps(SCHEMA),
-         "--no-session-persistence", "--tools", ""],
+        ["claude", "-p", "--model", model, "--output-format", "json", "--json-schema", json.dumps(SCHEMA),
+         "--no-session-persistence", "--tools", "",
+         # Skip MCP servers, skills, settings and the default system prompt: they add ~186k tokens per call.
+         "--strict-mcp-config", "--disable-slash-commands", "--setting-sources", "",
+         "--system-prompt", "You name coding-agent sessions. Reply only with the requested JSON."],
         input="\n".join(parts), capture_output=True, text=True, timeout=180, cwd=STATE_DIR,
         env={**os.environ, "HERDR_NAME_CHILD": "1"},
     )
@@ -219,6 +240,44 @@ def ask_model(agents, tabs):
     if structured is None:
         structured = json.loads(result.get("result", ""))
     return structured
+
+
+def apply_agent_names(reply, agents, names, state):
+    """Rename agents we may rename to the model's picks, avoiding names already in use."""
+    taken = {n for n in names.values() if n} - {a["name"] for a in agents if a["claimable"]}
+    by_pane = {a["pane_id"]: a for a in agents}
+    for item in reply.get("agents", []):
+        a = by_pane.get(item.get("pane_id"))
+        want = re.sub(r"[^a-z0-9_-]+", "-", (item.get("name") or "").lower()).strip("-")[:32]
+        if not a or not a["claimable"] or not NAME_RE.match(want):
+            continue
+        candidate, i = want, 2
+        while candidate in taken:
+            candidate = f"{want[:29]}-{i}"
+            i += 1
+        taken.add(candidate)
+        if candidate != a["name"]:
+            try:
+                herdr("agent", "rename", a["pane_id"], candidate)
+                log(f"Renamed agent {a['pane_id']} to {candidate}.")
+            except RuntimeError as e:
+                log(f"Could not rename agent {a['pane_id']}: {e}.")
+                continue
+        state["agents"][a["pane_id"]] = candidate
+        names[a["pane_id"]] = candidate
+
+
+def label_agents(listed):
+    """Shown in the sidebar as $kind and $label. Re-sent every tick, since herdr drops them when the pane's occupant changes."""
+    for a in listed:
+        if not a.get("agent"):
+            continue
+        try:
+            herdr("pane", "report-metadata", a["pane_id"], "--source", "namer",
+                  "--token", f"kind={a['agent']}", "--token", f"label={a.get('name') or PLACEHOLDER}")
+        except RuntimeError as e:
+            log(f"Could not label pane {a['pane_id']}: {e}.")
+
 
 
 def main():
@@ -256,6 +315,7 @@ def main():
             if p["pane_id"] in private_panes:
                 continue
             info = herdr("pane", "process-info", "--pane", p["pane_id"])["result"]["process_info"]
+            p["process_info"] = info
             if any("codex-pii" in process.get("cmdline", "")
                    or "CODEX_PII_API_KEY" in process.get("cmdline", "")
                    for process in info.get("foreground_processes", [])):
@@ -269,18 +329,17 @@ def main():
     for a in listed:
         session = (a.get("agent_session") or {}).get("value")
         kind = a.get("agent")
-        if kind:
-            # Shown in the sidebar as $kind. Re-sent every tick, since herdr drops it when the pane's occupant changes.
-            try:
-                herdr("pane", "report-metadata", a["pane_id"], "--source", "namer", "--token", f"kind={kind}")
-            except RuntimeError as e:
-                log(f"Could not label pane {a['pane_id']}: {e}.")
         if not session or kind not in ("claude", "codex"):
             continue
         path, msgs = (claude_messages if kind == "claude" else codex_messages)(session)
-        if not msgs:
-            continue
-        mtime = os.path.getmtime(path)
+        if msgs:
+            mtime = os.path.getmtime(path)
+        else:
+            # No saved conversation (a session that does not keep transcripts): name it from its screen.
+            msgs = [f"screen: {line}" for line in terminal(a, AGENT_SCREEN_LINES)["output"]]
+            if not msgs:
+                continue
+            mtime = hashlib.sha256("\n".join(msgs).encode()).hexdigest()
         pane = a["pane_id"]
         current = a.get("name") or ""
         ours = state["agents"].get(pane)
@@ -334,27 +393,7 @@ def main():
         reply = ask_model(agents, {k: v for k, v in tabs.items()
                                    if v["terminals"] or any(a["tab_id"] == k for a in agents)})
 
-        taken = {a["name"] for a in agents if a["name"] and not a["claimable"]}
-        by_pane = {a["pane_id"]: a for a in agents}
-        for item in reply.get("agents", []):
-            a = by_pane.get(item.get("pane_id"))
-            want = re.sub(r"[^a-z0-9_-]+", "-", (item.get("name") or "").lower()).strip("-")[:32]
-            if not a or not a["claimable"] or not NAME_RE.match(want):
-                continue
-            candidate, i = want, 2
-            while candidate in taken:
-                candidate = f"{want[:29]}-{i}"
-                i += 1
-            taken.add(candidate)
-            if candidate != a["name"]:
-                try:
-                    herdr("agent", "rename", a["pane_id"], candidate)
-                    log(f"Renamed agent {a['pane_id']} to {candidate}.")
-                except RuntimeError as e:
-                    log(f"Could not rename agent {a['pane_id']}: {e}.")
-                    continue
-            state["agents"][a["pane_id"]] = candidate
-            names[a["pane_id"]] = candidate
+        apply_agent_names(reply, agents, names, state)
 
         for item in reply.get("tabs", []):
             tab = tabs.get(item.get("tab_id"))
@@ -365,6 +404,14 @@ def main():
 
         for a in agents:
             state["seen"][a["pane_id"]] = a["seen"]
+    else:
+        # A new agent shows the placeholder until named; name it now, retrying only when its conversation moves on.
+        tried = state.setdefault("new_tried", {})
+        new = [a for a in agents if not a["name"] and tried.get(a["pane_id"]) != a["seen"]]
+        if new:
+            tried.update({a["pane_id"]: a["seen"] for a in new})
+            apply_agent_names(ask_model(new, {a["tab_id"]: {"needs_title": False} for a in new}, NEW_AGENT_MODEL),
+                              new, names, state)
 
     # Every tick: a lone agent's tab carries its name, a shared tab its shared title.
     for tab_id, tab in tabs.items():
@@ -380,6 +427,25 @@ def main():
                 continue
         state["tabs"][tab_id] = want
 
+    # Every tick: label each pane's border. An agent pane shows its agent's name, a shell what it runs.
+    state.setdefault("panes", {})
+    for panes in workspace_panes.values():
+        for p in panes:
+            if p["pane_id"] in private_panes or p["tab_id"] in private_tabs or "process_info" not in p:
+                continue
+            want = names.get(p["pane_id"]) or p.get("agent") or pane_title(p)
+            label = p.get("label") or ""
+            # A label we did not set was named by hand.
+            if not want or want == label or (label and label != state["panes"].get(p["pane_id"])):
+                continue
+            try:
+                herdr("pane", "rename", p["pane_id"], want)
+            except RuntimeError as e:
+                log(f"Could not label pane {p['pane_id']}: {e}.")
+                continue
+            state["panes"][p["pane_id"]] = want
+
+    label_agents([dict(a, name=names.get(a["pane_id"]) or a.get("name")) for a in listed])
     save_state(state)
 
 

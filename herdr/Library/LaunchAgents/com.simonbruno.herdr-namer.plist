@@ -15,7 +15,7 @@
         <string>/Users/simonbruno/.local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
     </dict>
     <key>StartInterval</key>
-    <integer>300</integer>
+    <integer>15</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardErrorPath</key>
