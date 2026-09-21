@@ -63,6 +63,9 @@ case "$mode" in
     exit 0
     ;;
   reset)
+    # Codex also fires SessionStart after compaction and on resume; only a fresh session starts over.
+    src="$(printf '%s' "$hook_input" | jq -r '.source // "startup"' 2>/dev/null || echo startup)"
+    [ "$src" = "startup" ] || [ "$src" = "clear" ] || exit 0
     rm -f "$pending" "${state_dir}/name-${key}.last" "${state_dir}/tab-${key}.last" 2>/dev/null || true
     exit 0
     ;;
