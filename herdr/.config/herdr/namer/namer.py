@@ -16,6 +16,7 @@ import time
 MODEL = "sonnet"
 MODEL_EVERY_SECONDS = 300
 RECENT_MESSAGES = 10
+TERMINAL_LINES = 12
 MESSAGE_CHARS = 300
 STATE_DIR = os.path.expanduser("~/.config/herdr/namer/state")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
@@ -52,9 +53,11 @@ Keep an issue key like stlr-2349 at the front when the work is about one, but on
 agent's own messages or cwd. Name the subject, not the action
 (save-bar-rollout, not implement-changes). Every agent name must be unique.
 
-Tab title: only for tabs marked "needs a title", which hold several agents. 2 to 6 words, at most 40
-characters, plain text. Title the shared theme, or list the subjects briefly. Start with the issue key in
-capitals (STLR-2349) when all its agents share one. Other tabs are named after their agent automatically.
+Tab title: only for tabs marked "needs a title". 2 to 6 words, at most 40 characters, plain text.
+A tab with several agents: title the shared theme, or list the subjects briefly. Start with the issue key in
+capitals (STLR-2349) when all its agents share one. A terminal tab has no agent: title what it is for, from
+the running command and its output (for example "baresip SIP phone" or "Studio dev server"); for an idle
+shell, go by its last commands. Other tabs are named after their agent automatically.
 
 A "current" name or title is one you gave earlier. Keep it exactly unless the work has clearly moved on;
 names that change every few minutes are worse than slightly imperfect ones.
@@ -71,6 +74,17 @@ def herdr(*args):
     if out.returncode != 0:
         raise RuntimeError(out.stderr.strip() or f"herdr {' '.join(args)} failed")
     return json.loads(out.stdout) if out.stdout.strip() else {}
+
+
+def terminal(pane):
+    """What a non-agent pane is doing: its foreground command, folder and last lines of output."""
+    info = herdr("pane", "process-info", "--pane", pane["pane_id"])["result"]["process_info"]
+    running = " ".join(p.get("cmdline", "")[:80] for p in info.get("foreground_processes", []))
+    out = subprocess.run(["herdr", "pane", "read", pane["pane_id"], "--source", "recent-unwrapped",
+                          "--lines", str(TERMINAL_LINES)], capture_output=True, text=True, timeout=30)
+    lines = [" ".join(l.split())[:150] for l in out.stdout.splitlines() if l.strip()][-TERMINAL_LINES:]
+    return {"pane_id": pane["pane_id"], "running": running,
+            "cwd": pane.get("foreground_cwd") or pane.get("cwd") or "", "output": lines}
 
 
 def text_of(content):
@@ -180,6 +194,9 @@ def ask_model(agents, tabs):
             current = f", current: {a['name']}" if a["claimable"] and a["name"] else ""
             parts.append(f"  AGENT {a['pane_id']} ({a['kind']}, cwd {a['cwd']}{current})")
             parts.extend(f"    {m}" for m in a["messages"])
+        for t in tab.get("terminals", []):
+            parts.append(f"  TERMINAL {t['pane_id']} (running: {t['running'] or 'nothing'}, cwd {t['cwd']})")
+            parts.extend(f"    | {line}" for line in t["output"])
         parts.append("")
     out = subprocess.run(
         ["claude", "-p", "--model", MODEL, "--output-format", "json", "--json-schema", json.dumps(SCHEMA),
@@ -239,27 +256,37 @@ def main():
         panes_by_tab.setdefault(a["tab_id"], []).append(a["pane_id"])
 
     tabs = {}
-    for ws in {a["workspace_id"] for a in listed}:
+    for ws in [w["workspace_id"] for w in herdr("workspace", "list")["result"]["workspaces"]]:
+        shells = {}
+        for pn in herdr("pane", "list", "--workspace", ws)["result"]["panes"]:
+            shells.setdefault(pn["tab_id"], []).append(pn)
         for t in herdr("tab", "list", "--workspace", ws)["result"]["tabs"]:
             panes = sorted(panes_by_tab.get(t["tab_id"], []))
-            if not panes:
-                continue
             label = t.get("label") or ""
+            terminals, fp = [], None
+            if not panes:
+                # A tab with no agent is titled from what its terminals run.
+                if not (label.isdigit() or label == state["tabs"].get(t["tab_id"])):
+                    continue
+                terminals = [terminal(pn) for pn in shells.get(t["tab_id"], [])]
+                # Retitle when the command or recent output changes, not on every new log line.
+                fp = json.dumps([[x["running"], x["cwd"], x["output"][-3:]] for x in terminals])
             if not state.get("tab_labels_adopted"):
                 state["tabs"][t["tab_id"]] = label  # One-off takeover of every tab that holds an agent.
             # Herdr's default label is the tab number; anything else we did not set was named by hand.
             claimable = label.isdigit() or label == state["tabs"].get(t["tab_id"])
             stored = state.setdefault("tab_titles", {}).get(t["tab_id"]) or {}
-            title = stored.get("title") if stored.get("panes") == panes else None
-            tabs[t["tab_id"]] = {"label": label, "claimable": claimable, "panes": panes,
-                                 "needs_title": claimable and len(panes) > 1, "title": title}
+            title = stored.get("title") if stored.get("panes") == panes and stored.get("fp") == fp else None
+            tabs[t["tab_id"]] = {"label": label, "claimable": claimable, "panes": panes, "terminals": terminals,
+                                 "fp": fp, "needs_title": claimable and len(panes) != 1, "title": title}
     state["tab_labels_adopted"] = True
 
     # A tab that gained or lost agents needs a fresh shared title.
     changed = changed or any(t["needs_title"] and not t["title"] for t in tabs.values())
-    if agents and changed and (force or time.time() - state.get("last_model_call", 0) >= MODEL_EVERY_SECONDS):
+    if changed and (force or time.time() - state.get("last_model_call", 0) >= MODEL_EVERY_SECONDS):
         state["last_model_call"] = time.time()
-        reply = ask_model(agents, {k: v for k, v in tabs.items() if any(a["tab_id"] == k for a in agents)})
+        reply = ask_model(agents, {k: v for k, v in tabs.items()
+                                   if v["terminals"] or any(a["tab_id"] == k for a in agents)})
 
         taken = {a["name"] for a in agents if a["name"] and not a["claimable"]}
         by_pane = {a["pane_id"]: a for a in agents}
@@ -288,7 +315,7 @@ def main():
             want = " ".join((item.get("title") or "").split())[:40]
             if tab and tab["needs_title"] and want:
                 tab["title"] = want
-                state["tab_titles"][item["tab_id"]] = {"panes": tab["panes"], "title": want}
+                state["tab_titles"][item["tab_id"]] = {"panes": tab["panes"], "fp": tab["fp"], "title": want}
 
         for a in agents:
             state["seen"][a["pane_id"]] = a["seen"]
