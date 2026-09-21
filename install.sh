@@ -26,6 +26,8 @@ case "$OS" in
         brew install --cask ghostty karabiner-elements
         cd "$DOTFILES"
         stow -t ~ nvim ghostty herdr karabiner codex
+        # Renames herdr agents and tabs every five minutes.
+        launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.simonbruno.herdr-namer.plist 2>/dev/null || true
         ;;
     arch|endeavouros|manjaro)
         if command -v yay &>/dev/null; then

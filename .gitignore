@@ -1,3 +1,5 @@
 # Karabiner writes these next to its config, and stow links that whole folder here.
 karabiner/.config/karabiner/assets/
 karabiner/.config/karabiner/automatic_backups/
+herdr/.config/herdr/namer/state/
+herdr/.config/herdr/namer/namer.log
