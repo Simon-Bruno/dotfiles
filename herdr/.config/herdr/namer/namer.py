@@ -52,13 +52,14 @@ Keep an issue key like stlr-2349 at the front when the work is about one, but on
 agent's own messages or cwd. Name the subject, not the action
 (save-bar-rollout, not implement-changes). Every agent name must be unique.
 
-Tab title: 2 to 6 words, at most 40 characters, plain text. Start with the issue key in capitals (STLR-2349)
-when there is one. When a tab holds several agents, title the shared theme, or list the subjects briefly.
+Tab title: only for tabs marked "needs a title", which hold several agents. 2 to 6 words, at most 40
+characters, plain text. Title the shared theme, or list the subjects briefly. Start with the issue key in
+capitals (STLR-2349) when all its agents share one. Other tabs are named after their agent automatically.
 
 A "current" name or title is one you gave earlier. Keep it exactly unless the work has clearly moved on;
 names that change every few minutes are worse than slightly imperfect ones.
 
-Return every agent and every tab listed below."""
+Return every agent, and a title for every tab that needs one."""
 
 
 def log(msg):
@@ -168,8 +169,11 @@ def save_state(state):
 def ask_model(agents, tabs):
     parts = [INSTRUCTIONS, ""]
     for tab_id, tab in tabs.items():
-        # Show only titles we set: a hand-picked or stale title would leak into other agents' names.
-        parts.append(f"TAB {tab_id}" + (f" (current: {tab['label']})" if tab["claimable"] and not tab["label"].isdigit() else ""))
+        header = f"TAB {tab_id}"
+        if tab["needs_title"]:
+            # Show only titles we set: a hand-picked or stale title would leak into agents' names.
+            header += " (needs a title" + (f", current: {tab['title']}" if tab["title"] else "") + ")"
+        parts.append(header)
         for a in agents:
             if a["tab_id"] != tab_id:
                 continue
@@ -229,60 +233,80 @@ def main():
             "messages": msgs[-RECENT_MESSAGES:], "seen": [session, mtime],
         })
 
-    if not agents or not changed:
-        return
-    if not force and time.time() - state.get("last_model_call", 0) < MODEL_EVERY_SECONDS:
-        return
-    state["last_model_call"] = time.time()
+    names = {a["pane_id"]: a.get("name") or "" for a in listed}
+    panes_by_tab = {}
+    for a in listed:
+        panes_by_tab.setdefault(a["tab_id"], []).append(a["pane_id"])
 
     tabs = {}
-    for ws in {a["workspace_id"] for a in agents}:
+    for ws in {a["workspace_id"] for a in listed}:
         for t in herdr("tab", "list", "--workspace", ws)["result"]["tabs"]:
-            if any(a["tab_id"] == t["tab_id"] for a in agents):
-                label = t.get("label") or ""
-                # Herdr's default label is the tab number; anything else we did not set was named by hand.
-                claimable = label.isdigit() or label == state["tabs"].get(t["tab_id"])
-                tabs[t["tab_id"]] = {"label": label, "claimable": claimable}
-
-    reply = ask_model(agents, tabs)
-
-    taken = {a["name"] for a in agents if a["name"] and not a["claimable"]}
-    by_pane = {a["pane_id"]: a for a in agents}
-    for item in reply.get("agents", []):
-        a = by_pane.get(item.get("pane_id"))
-        want = re.sub(r"[^a-z0-9_-]+", "-", (item.get("name") or "").lower()).strip("-")[:32]
-        if not a or not a["claimable"] or not NAME_RE.match(want):
-            continue
-        candidate, i = want, 2
-        while candidate in taken:
-            candidate = f"{want[:29]}-{i}"
-            i += 1
-        taken.add(candidate)
-        if candidate != a["name"]:
-            try:
-                herdr("agent", "rename", a["pane_id"], candidate)
-                log(f"Renamed agent {a['pane_id']} to {candidate}.")
-            except RuntimeError as e:
-                log(f"Could not rename agent {a['pane_id']}: {e}.")
+            panes = sorted(panes_by_tab.get(t["tab_id"], []))
+            if not panes:
                 continue
-        state["agents"][a["pane_id"]] = candidate
+            label = t.get("label") or ""
+            if not state.get("tab_labels_adopted"):
+                state["tabs"][t["tab_id"]] = label  # One-off takeover of every tab that holds an agent.
+            # Herdr's default label is the tab number; anything else we did not set was named by hand.
+            claimable = label.isdigit() or label == state["tabs"].get(t["tab_id"])
+            stored = state.setdefault("tab_titles", {}).get(t["tab_id"]) or {}
+            title = stored.get("title") if stored.get("panes") == panes else None
+            tabs[t["tab_id"]] = {"label": label, "claimable": claimable, "panes": panes,
+                                 "needs_title": claimable and len(panes) > 1, "title": title}
+    state["tab_labels_adopted"] = True
 
-    for item in reply.get("tabs", []):
-        tab = tabs.get(item.get("tab_id"))
-        want = " ".join((item.get("title") or "").split())[:40]
-        if not tab or not tab["claimable"] or not want:
+    # A tab that gained or lost agents needs a fresh shared title.
+    changed = changed or any(t["needs_title"] and not t["title"] for t in tabs.values())
+    if agents and changed and (force or time.time() - state.get("last_model_call", 0) >= MODEL_EVERY_SECONDS):
+        state["last_model_call"] = time.time()
+        reply = ask_model(agents, {k: v for k, v in tabs.items() if any(a["tab_id"] == k for a in agents)})
+
+        taken = {a["name"] for a in agents if a["name"] and not a["claimable"]}
+        by_pane = {a["pane_id"]: a for a in agents}
+        for item in reply.get("agents", []):
+            a = by_pane.get(item.get("pane_id"))
+            want = re.sub(r"[^a-z0-9_-]+", "-", (item.get("name") or "").lower()).strip("-")[:32]
+            if not a or not a["claimable"] or not NAME_RE.match(want):
+                continue
+            candidate, i = want, 2
+            while candidate in taken:
+                candidate = f"{want[:29]}-{i}"
+                i += 1
+            taken.add(candidate)
+            if candidate != a["name"]:
+                try:
+                    herdr("agent", "rename", a["pane_id"], candidate)
+                    log(f"Renamed agent {a['pane_id']} to {candidate}.")
+                except RuntimeError as e:
+                    log(f"Could not rename agent {a['pane_id']}: {e}.")
+                    continue
+            state["agents"][a["pane_id"]] = candidate
+            names[a["pane_id"]] = candidate
+
+        for item in reply.get("tabs", []):
+            tab = tabs.get(item.get("tab_id"))
+            want = " ".join((item.get("title") or "").split())[:40]
+            if tab and tab["needs_title"] and want:
+                tab["title"] = want
+                state["tab_titles"][item["tab_id"]] = {"panes": tab["panes"], "title": want}
+
+        for a in agents:
+            state["seen"][a["pane_id"]] = a["seen"]
+
+    # Every tick: a lone agent's tab carries its name, a shared tab its shared title.
+    for tab_id, tab in tabs.items():
+        want = names[tab["panes"][0]] if len(tab["panes"]) == 1 else tab["title"]
+        if not tab["claimable"] or not want:
             continue
         if want != tab["label"]:
             try:
-                herdr("tab", "rename", item["tab_id"], want)
-                log(f"Renamed tab {item['tab_id']} to {want}.")
+                herdr("tab", "rename", tab_id, want)
+                log(f"Renamed tab {tab_id} to {want}.")
             except RuntimeError as e:
-                log(f"Could not rename tab {item['tab_id']}: {e}.")
+                log(f"Could not rename tab {tab_id}: {e}.")
                 continue
-        state["tabs"][item["tab_id"]] = want
+        state["tabs"][tab_id] = want
 
-    for a in agents:
-        state["seen"][a["pane_id"]] = a["seen"]
     save_state(state)
 
 
