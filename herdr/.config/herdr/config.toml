@@ -38,4 +38,4 @@ sidebar_width = 34
 sidebar_max_width = 48
 
 [ui.sidebar.agents]
-rows = [["state_icon", "machine", "workspace"], ["agent"]]
+rows = [["state_icon", "machine", "$kind"], ["agent"]]

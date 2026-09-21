@@ -14,6 +14,7 @@ import sys
 import time
 
 MODEL = "sonnet"
+MODEL_EVERY_SECONDS = 300
 RECENT_MESSAGES = 10
 MESSAGE_CHARS = 300
 STATE_DIR = os.path.expanduser("~/.config/herdr/namer/state")
@@ -203,6 +204,12 @@ def main():
     for a in listed:
         session = (a.get("agent_session") or {}).get("value")
         kind = a.get("agent")
+        if kind:
+            # Shown in the sidebar as $kind. Re-sent every tick, since herdr drops it when the pane's occupant changes.
+            try:
+                herdr("pane", "report-metadata", a["pane_id"], "--source", "namer", "--token", f"kind={kind}")
+            except RuntimeError as e:
+                log(f"Could not label pane {a['pane_id']}: {e}.")
         if not session or kind not in ("claude", "codex"):
             continue
         path, msgs = (claude_messages if kind == "claude" else codex_messages)(session)
@@ -224,6 +231,9 @@ def main():
 
     if not agents or not changed:
         return
+    if not force and time.time() - state.get("last_model_call", 0) < MODEL_EVERY_SECONDS:
+        return
+    state["last_model_call"] = time.time()
 
     tabs = {}
     for ws in {a["workspace_id"] for a in agents}:
