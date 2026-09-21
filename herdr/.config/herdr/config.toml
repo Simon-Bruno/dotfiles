@@ -34,6 +34,7 @@ swap_pane_up = "prefix+alt+k"
 swap_pane_right = "prefix+alt+l"
 
 [ui]
+pane_scrollbars = false  # no scrollbar column on the right of each pane
 show_agent_labels_on_pane_borders = true
 sidebar_width = 34
 sidebar_max_width = 48
