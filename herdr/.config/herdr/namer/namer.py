@@ -6,6 +6,7 @@ session, asks Sonnet for all names in one call, and applies them. Names and tab
 labels that were set by hand are left alone: we only overwrite what we set last.
 """
 import glob
+import hashlib
 import json
 import os
 import re
@@ -67,6 +68,13 @@ Return every agent, and a title for every tab that needs one."""
 
 def log(msg):
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}", file=sys.stderr, flush=True)
+
+
+def mark_private(pane):
+    private = os.path.expanduser("~/.config/herdr/namer/private-panes")
+    os.makedirs(private, mode=0o700, exist_ok=True)
+    with open(os.path.join(private, hashlib.sha256(pane.encode()).hexdigest()), "w") as f:
+        f.write(pane)
 
 
 def herdr(*args):
@@ -219,6 +227,42 @@ def main():
     state = load_state()
 
     listed = herdr("agent", "list")["result"]["agents"]
+    # Exclude before reading any conversation or terminal output. Markers persist
+    # after exit because shell scrollback may still contain private content.
+    private_panes = set()
+    for marker in glob.glob(os.path.expanduser("~/.config/herdr/namer/private-panes/*")):
+        with open(marker) as f:
+            private_panes.add(f.read().strip())
+    private_sessions = {
+        os.path.basename(path)[-42:-6]
+        for path in glob.glob(os.path.expanduser("~/.codex-pii/sessions/*/*/*/rollout-*.jsonl"))
+    }
+    private_tabs = {
+        a["tab_id"] for a in listed
+        if a["pane_id"] in private_panes
+        or (a.get("agent_session") or {}).get("value") in private_sessions
+    }
+    # Also protect sessions that were started before the launcher added markers.
+    for a in listed:
+        if (a.get("agent_session") or {}).get("value") in private_sessions:
+            mark_private(a["pane_id"])
+            private_panes.add(a["pane_id"])
+    workspaces = herdr("workspace", "list")["result"]["workspaces"]
+    workspace_panes = {}
+    for ws in workspaces:
+        panes = herdr("pane", "list", "--workspace", ws["workspace_id"])["result"]["panes"]
+        workspace_panes[ws["workspace_id"]] = panes
+        for p in panes:
+            if p["pane_id"] in private_panes:
+                continue
+            info = herdr("pane", "process-info", "--pane", p["pane_id"])["result"]["process_info"]
+            if any("codex-pii" in process.get("cmdline", "")
+                   or "CODEX_PII_API_KEY" in process.get("cmdline", "")
+                   for process in info.get("foreground_processes", [])):
+                mark_private(p["pane_id"])
+                private_panes.add(p["pane_id"])
+        private_tabs.update(p["tab_id"] for p in panes if p["pane_id"] in private_panes)
+    listed = [a for a in listed if a["tab_id"] not in private_tabs]
     if state.get("adopt_hook_names"):
         adopt_hook_names(state, listed)
     agents, changed = [], force
@@ -256,11 +300,13 @@ def main():
         panes_by_tab.setdefault(a["tab_id"], []).append(a["pane_id"])
 
     tabs = {}
-    for ws in [w["workspace_id"] for w in herdr("workspace", "list")["result"]["workspaces"]]:
+    for ws in [w["workspace_id"] for w in workspaces]:
         shells = {}
-        for pn in herdr("pane", "list", "--workspace", ws)["result"]["panes"]:
+        for pn in workspace_panes[ws]:
             shells.setdefault(pn["tab_id"], []).append(pn)
         for t in herdr("tab", "list", "--workspace", ws)["result"]["tabs"]:
+            if t["tab_id"] in private_tabs:
+                continue
             panes = sorted(panes_by_tab.get(t["tab_id"], []))
             label = t.get("label") or ""
             terminals, fp = [], None
