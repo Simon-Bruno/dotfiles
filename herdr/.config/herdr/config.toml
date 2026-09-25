@@ -51,7 +51,16 @@ divider = "▏"        # line on the left edge of its column, so lines and highl
 [ui.sidebar.agents]
 row_gap = 0
 # $kind and $label come from the namer (~/.config/herdr/namer); $label is "new session" until it names the agent.
-rows = [["state_icon", "machine", "$kind"], ["$label"]]
+# State as a word: blocked (red) and done (blue) need Simon, working and idle are dimmed.
+rows = [
+  ["state_icon", { token = "state_text", rules = [
+      { equals = "blocked", fg = "#ff453a", bold = true },
+      { equals = "done", fg = "#0a84ff", bold = true },
+      { equals = "working", dim = true },
+      { equals = "idle", dim = true } ] }, "$kind"],
+  ["$label"],
+  [{ token = "tab", dim = true }],
+]
 
 [theme]
 # macOS system colors on top of the terminal theme, which takes its base colors from Ghostty.
